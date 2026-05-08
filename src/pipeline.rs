@@ -13,6 +13,22 @@ use crate::{
 
 const AUDIO_SAMPLE_RATE: i32 = 48_000;
 
+/// Target buffer duration in front of the encoder. Sized to absorb I-frame
+/// encode hiccups (typically 30–80 ms) plus a safety margin; if the encoder
+/// is sustained-slow, the queue fills, `pipewiresrc` blocks, and `PipeWire`
+/// drops at the source — the right failure mode.
+const VIDEOENC_QUEUE_TARGET_SECONDS: u64 = 2;
+/// Absolute memory ceiling for the raw-video queue regardless of resolution.
+/// Keeps the recorder from monopolising system RAM if the encoder freezes;
+/// 1.5 GiB is safe headroom on a 16 GiB machine while still buffering ~1 s
+/// of `4K` `BGRx` (~33 MiB/frame).
+const VIDEOENC_QUEUE_BYTES_CEILING: u32 = 1_536 * 1024 * 1024;
+/// Floor so very low resolutions still get a meaningful buffer.
+const VIDEOENC_QUEUE_BYTES_FLOOR: u32 = 64 * 1024 * 1024;
+/// Fallback frame size used when stream dimensions aren't reported by the
+/// portal — 1080p `BGRx`, the most common desktop case.
+const VIDEOENC_QUEUE_FALLBACK_FRAME_BYTES: u64 = 1920 * 1080 * 4;
+
 #[derive(Debug)]
 #[must_use]
 pub struct PipelineBuilder {
@@ -108,8 +124,24 @@ impl PipelineBuilder {
             self.resolution_height,
         )
         .context("Failed to create videosrc bin")?;
+        let videoenc_queue_max_bytes = compute_videoenc_queue_max_bytes(
+            &self.streams,
+            self.framerate,
+            VIDEOENC_QUEUE_TARGET_SECONDS,
+        );
+        tracing::debug!(
+            videoenc_queue_max_bytes,
+            target_seconds = VIDEOENC_QUEUE_TARGET_SECONDS,
+            "Sized kooha-videoenc-queue"
+        );
         let videoenc_queue = gst::ElementFactory::make("queue")
             .name("kooha-videoenc-queue")
+            .property("max-size-buffers", 0u32)
+            .property("max-size-bytes", videoenc_queue_max_bytes)
+            .property(
+                "max-size-time",
+                VIDEOENC_QUEUE_TARGET_SECONDS * gst::ClockTime::SECOND.nseconds(),
+            )
             .build()?;
         let filesink = gst::ElementFactory::make("filesink")
             .property(
@@ -367,6 +399,50 @@ pub fn make_videosrc_bin(
     bin.add_pad(&gst::GhostPad::with_target(&src_pad)?)?;
 
     Ok(bin)
+}
+
+/// Estimates the composited raw-video frame size in bytes (`BGRx` = 4 bytes
+/// per pixel). Falls back to a 1080p estimate when stream dimensions are
+/// unknown so the queue still gets a sensible byte cap.
+fn estimated_frame_bytes(streams: &[Stream]) -> u64 {
+    match streams {
+        [single] => single.size().map_or(VIDEOENC_QUEUE_FALLBACK_FRAME_BYTES, |(w, h)| {
+            (w as u64) * (h as u64) * 4
+        }),
+        many if !many.is_empty() => {
+            let mut total_w: u64 = 0;
+            let mut max_h: u64 = 0;
+            for s in many {
+                if let Some((w, h)) = s.size() {
+                    total_w += w as u64;
+                    max_h = max_h.max(h as u64);
+                }
+            }
+            if total_w == 0 || max_h == 0 {
+                VIDEOENC_QUEUE_FALLBACK_FRAME_BYTES
+            } else {
+                total_w * max_h * 4
+            }
+        }
+        _ => VIDEOENC_QUEUE_FALLBACK_FRAME_BYTES,
+    }
+}
+
+/// Sizes the raw-video queue's byte cap to hold roughly `target_seconds` of
+/// frames at the source resolution and target framerate, clamped between the
+/// floor and ceiling so very low or very high resolutions both get sane caps.
+fn compute_videoenc_queue_max_bytes(
+    streams: &[Stream],
+    framerate: gst::Fraction,
+    target_seconds: u64,
+) -> u32 {
+    let frame_bytes = estimated_frame_bytes(streams);
+    let fps = (framerate.numer() as f64 / framerate.denom().max(1) as f64).ceil() as u64;
+    let needed = frame_bytes.saturating_mul(fps.max(1)).saturating_mul(target_seconds);
+    needed.clamp(
+        VIDEOENC_QUEUE_BYTES_FLOOR as u64,
+        VIDEOENC_QUEUE_BYTES_CEILING as u64,
+    ) as u32
 }
 
 /// Computes the target (width, height) for downscaling. Returns `None` when
