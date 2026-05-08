@@ -101,6 +101,14 @@ meson compile -C _build
 note "Installing to $PREFIX (sudo)..."
 sudo meson install -C _build
 
+# Tell the running session D-Bus about the new service file so the
+# desktop launcher can D-Bus-activate Kooha without a logout/login.
+# Run as the invoking user (not root); failure is non-fatal.
+if command -v busctl >/dev/null; then
+  note "Reloading session D-Bus to pick up the new .service file..."
+  busctl --user call org.freedesktop.DBus / org.freedesktop.DBus ReloadConfig 2>/dev/null || true
+fi
+
 cat <<EOF
 
 $(printf '\033[1;32m✓\033[0m') Kooha installed to $PREFIX. Run: kooha
