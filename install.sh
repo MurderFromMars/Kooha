@@ -15,15 +15,16 @@ note()  { printf '\033[1;36m::\033[0m %s\n' "$*"; }
 warn()  { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
 die()   { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
-# 1. Distro check
-[[ -r /etc/os-release ]] || die "/etc/os-release missing — can't detect distro."
-# shellcheck disable=SC1091
-. /etc/os-release
-if [[ "${ID:-}" != "arch" && "${ID_LIKE:-}" != *arch* ]]; then
-  die "This installer supports Arch Linux only (detected ID=${ID:-unknown})."
-fi
-command -v pacman >/dev/null || die "pacman not found in PATH."
+# 1. Sanity checks — gate on pacman so any Arch-based distro works
+#    (Arch, Manjaro, EndeavourOS, CachyOS, Garuda, Artix, …)
+command -v pacman >/dev/null || die "pacman not found — this installer requires an Arch-based distro."
 command -v sudo   >/dev/null || die "sudo not found in PATH."
+
+if [[ -r /etc/os-release ]]; then
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  note "Detected distro: ${PRETTY_NAME:-${ID:-unknown}}"
+fi
 
 # 2. Base build + runtime dependencies (matches meson.build)
 BASE_PKGS=(
