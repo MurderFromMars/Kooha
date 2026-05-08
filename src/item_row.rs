@@ -15,6 +15,10 @@ mod imp {
         pub(super) warning_tooltip_text: RefCell<String>,
         #[property(get, set = Self::set_shows_warning_icon, explicit_notify)]
         pub(super) shows_warning_icon: Cell<bool>,
+        #[property(get, set = Self::set_unavailable_tooltip_text, explicit_notify)]
+        pub(super) unavailable_tooltip_text: RefCell<String>,
+        #[property(get, set = Self::set_shows_unavailable_icon, explicit_notify)]
+        pub(super) shows_unavailable_icon: Cell<bool>,
         #[property(get, set = Self::set_is_on_popover, explicit_notify)]
         pub(super) is_on_popover: Cell<bool>,
         #[property(get, set = Self::set_is_selected, explicit_notify)]
@@ -23,9 +27,13 @@ mod imp {
         #[template_child]
         pub(super) start_warning_icon: TemplateChild<gtk::Image>,
         #[template_child]
+        pub(super) start_unavailable_icon: TemplateChild<gtk::Image>,
+        #[template_child]
         pub(super) title_label: TemplateChild<gtk::Label>,
         #[template_child]
         pub(super) selected_icon: TemplateChild<gtk::Image>,
+        #[template_child]
+        pub(super) end_unavailable_icon: TemplateChild<gtk::Image>,
         #[template_child]
         pub(super) end_warning_icon: TemplateChild<gtk::Image>,
     }
@@ -55,6 +63,9 @@ mod imp {
             obj.update_title_label();
             obj.update_warning_icon_tooltip_text();
             obj.update_warning_icons_visibility();
+            obj.update_unavailable_icon_tooltip_text();
+            obj.update_unavailable_icons_visibility();
+            obj.update_title_label_dim();
             obj.update_selected_icon_visibility();
             obj.update_selected_icon_opacity();
         }
@@ -103,6 +114,32 @@ mod imp {
             obj.notify_shows_warning_icon();
         }
 
+        fn set_unavailable_tooltip_text(&self, unavailable_tooltip_text: String) {
+            let obj = self.obj();
+
+            if unavailable_tooltip_text == obj.unavailable_tooltip_text() {
+                return;
+            }
+
+            self.unavailable_tooltip_text
+                .replace(unavailable_tooltip_text);
+            obj.update_unavailable_icon_tooltip_text();
+            obj.notify_unavailable_tooltip_text();
+        }
+
+        fn set_shows_unavailable_icon(&self, shows_unavailable_icon: bool) {
+            let obj = self.obj();
+
+            if shows_unavailable_icon == obj.shows_unavailable_icon() {
+                return;
+            }
+
+            self.shows_unavailable_icon.set(shows_unavailable_icon);
+            obj.update_unavailable_icons_visibility();
+            obj.update_title_label_dim();
+            obj.notify_shows_unavailable_icon();
+        }
+
         fn set_is_on_popover(&self, is_on_popover: bool) {
             let obj = self.obj();
 
@@ -113,6 +150,7 @@ mod imp {
             self.is_on_popover.set(is_on_popover);
             obj.update_selected_icon_visibility();
             obj.update_warning_icons_visibility();
+            obj.update_unavailable_icons_visibility();
             obj.notify_is_on_popover();
         }
 
@@ -165,6 +203,37 @@ impl ItemRow {
             .set_visible(shows_warning_icon && !is_on_popover);
         imp.end_warning_icon
             .set_visible(shows_warning_icon && is_on_popover);
+    }
+
+    fn update_unavailable_icon_tooltip_text(&self) {
+        let imp = self.imp();
+
+        let unavailable_tooltip_text =
+            Some(self.unavailable_tooltip_text()).filter(|s| !s.is_empty());
+        imp.start_unavailable_icon
+            .set_tooltip_text(unavailable_tooltip_text.as_deref());
+        imp.end_unavailable_icon
+            .set_tooltip_text(unavailable_tooltip_text.as_deref());
+    }
+
+    fn update_unavailable_icons_visibility(&self) {
+        let imp = self.imp();
+
+        let is_on_popover = self.is_on_popover();
+        let shows_unavailable_icon = self.shows_unavailable_icon();
+        imp.start_unavailable_icon
+            .set_visible(shows_unavailable_icon && !is_on_popover);
+        imp.end_unavailable_icon
+            .set_visible(shows_unavailable_icon && is_on_popover);
+    }
+
+    fn update_title_label_dim(&self) {
+        let imp = self.imp();
+        if self.shows_unavailable_icon() {
+            imp.title_label.add_css_class("dim-label");
+        } else {
+            imp.title_label.remove_css_class("dim-label");
+        }
     }
 
     fn update_selected_icon_visibility(&self) {

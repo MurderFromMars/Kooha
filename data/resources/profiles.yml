@@ -58,6 +58,94 @@ supported:
       gifenc repeat=-1 speed=30 !
       queue
 
+  - id: va-h264
+    name: MP4 (VA-API H.264)
+    extension: mp4
+    videoenc: >
+      vapostproc !
+      vah264enc !
+      queue !
+      h264parse
+    audioenc: >
+      audioconvert !
+      lamemp3enc !
+      queue !
+      mpegaudioparse
+    muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
+
+  - id: va-h265
+    name: MP4 (VA-API H.265)
+    extension: mp4
+    videoenc: >
+      vapostproc !
+      vah265enc !
+      queue !
+      h265parse
+    audioenc: >
+      audioconvert !
+      lamemp3enc !
+      queue !
+      mpegaudioparse
+    muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
+
+  - id: va-av1
+    name: Matroska (VA-API AV1)
+    extension: mkv
+    videoenc: >
+      vapostproc !
+      vaav1enc !
+      queue !
+      av1parse
+    audioenc: >
+      audioconvert !
+      opusenc !
+      queue
+    muxer: matroskamux
+
+  - id: nvenc-h264
+    name: MP4 (NVENC H.264)
+    extension: mp4
+    videoenc: >
+      videoconvert chroma-mode=none dither=none matrix-mode=output-only n-threads=${N_THREADS} !
+      nvh264enc !
+      queue !
+      h264parse
+    audioenc: >
+      audioconvert !
+      lamemp3enc !
+      queue !
+      mpegaudioparse
+    muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
+
+  - id: nvenc-h265
+    name: MP4 (NVENC H.265)
+    extension: mp4
+    videoenc: >
+      videoconvert chroma-mode=none dither=none matrix-mode=output-only n-threads=${N_THREADS} !
+      nvh265enc !
+      queue !
+      h265parse
+    audioenc: >
+      audioconvert !
+      lamemp3enc !
+      queue !
+      mpegaudioparse
+    muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
+
+  - id: nvenc-av1
+    name: Matroska (NVENC AV1)
+    extension: mkv
+    videoenc: >
+      videoconvert chroma-mode=none dither=none matrix-mode=output-only n-threads=${N_THREADS} !
+      nvav1enc !
+      queue !
+      av1parse
+    audioenc: >
+      audioconvert !
+      opusenc !
+      queue
+    muxer: matroskamux
+
 experimental:
   - id: webm-vp9
     name: WebM (VP9)
@@ -84,18 +172,3 @@ experimental:
       opusenc !
       queue
     muxer: webmmux
-
-  - id: va-h264
-    name: WebM VA H264
-    extension: mp4
-    videoenc: >
-      vapostproc !
-      vah264enc !
-      queue !
-      h264parse
-    audioenc: >
-      audioconvert !
-      lamemp3enc !
-      queue !
-      mpegaudioparse
-    muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise

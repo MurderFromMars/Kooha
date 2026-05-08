@@ -309,6 +309,21 @@ impl PreferencesDialog {
                 item_row.set_shows_warning_icon(
                     profile.is_some_and(|profile| profile.is_experimental()),
                 );
+
+                let unavailability_reason =
+                    profile.and_then(|profile| profile.unavailability_reason());
+                item_row.set_shows_unavailable_icon(unavailability_reason.is_some());
+                item_row.set_unavailable_tooltip_text(
+                    unavailability_reason
+                        .as_deref()
+                        .map(|reason| {
+                            // Translators: {} is a technical reason a profile cannot be used,
+                            // typically the name of a missing GStreamer element.
+                            gettext("Unavailable: {}").replace("{}", reason)
+                        })
+                        .unwrap_or_default(),
+                );
+                list_item.set_selectable(unavailability_reason.is_none());
             },
             |_| {},
         )));
@@ -330,10 +345,9 @@ impl PreferencesDialog {
         };
         let filter = gtk::CustomFilter::new(move |obj| {
             profile_from_obj(obj).is_none_or(|profile| {
-                (Feature::ExperimentalFormats.is_enabled()
+                Feature::ExperimentalFormats.is_enabled()
                     || !profile.is_experimental()
-                    || active_profile.is_some_and(|active_profile| active_profile == profile))
-                    && profile.is_available()
+                    || active_profile.is_some_and(|active_profile| active_profile == profile)
             })
         });
         let profile_filter_model = gtk::FilterListModel::new(Some(profile_model), Some(filter));

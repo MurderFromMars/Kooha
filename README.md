@@ -1,149 +1,158 @@
 <h1 align="center">
   <img alt="Kooha" src="data/icons/io.github.seadve.Kooha.svg" width="192" height="192"/>
   <br>
-  Kooha
+  Kooha — GPU-accelerated fork
 </h1>
 
 <p align="center">
-  <strong>Elegantly record your screen</strong>
-</p>
-
-<p align="center">
-  <a href="https://flathub.org/apps/details/io.github.seadve.Kooha">
-    <img alt="Download on Flathub" src="https://flathub.org/api/badge?svg&locale=en&light" width="200"/>
-  </a>
-  <br>
-  <a href="https://seadve.github.io/donate/">
-    <img alt="Donate" src="https://img.shields.io/badge/%E2%9D%A4-donate-yellow?style=for-the-badge"/>
-  </a>
-</p>
-
-<br>
-
-<p align="center">
-  <a href="https://hosted.weblate.org/engage/seadve/">
-    <img alt="Translation status" src="https://hosted.weblate.org/widgets/seadve/-/kooha/svg-badge.svg"/>
-  </a>
-  <a href="https://flathub.org/apps/details/io.github.seadve.Kooha">
-    <img alt="Flathub downloads" src="https://img.shields.io/badge/dynamic/json?color=informational&label=downloads&logo=flathub&logoColor=white&query=%24.installs_total&url=https%3A%2F%2Fflathub.org%2Fapi%2Fv2%2Fstats%2Fio.github.seadve.Kooha"/>
-  </a>
-  <a href="https://github.com/SeaDve/Kooha/actions/workflows/ci.yml">
-    <img alt="CI status" src="https://github.com/SeaDve/Kooha/actions/workflows/ci.yml/badge.svg"/>
-  </a>
+  <strong>Elegantly record your screen — now with proper hardware encoding on Arch Linux.</strong>
 </p>
 
 <p align="center">
   <img src="data/screenshots/preview.png" alt="Preview"/>
 </p>
 
-Capture your screen in an intuitive and straightforward way without distractions.
+This is a fork of [SeaDve/Kooha](https://github.com/SeaDve/Kooha) that adds
+first-class hardware-accelerated encoding (VA-API for Intel/AMD, NVENC for
+NVIDIA) and an Arch-Linux installer that handles every dependency for you,
+detects your GPU, and pulls in the right driver packages so the new profiles
+light up automatically.
 
-Kooha is a simple screen recorder with a minimal interface. You can simply click
-the record button without having to configure a bunch of settings.
+If you're on Flatpak or another distro, use the upstream project — this fork
+intentionally drops Flatpak packaging in favour of a clean source build.
 
-The main features of Kooha include the following:
-* 🎙️ Record microphone, desktop audio, or both at the same time
-* 📼 Support for WebM, MP4, GIF, and Matroska formats
-* 🖥️ Select a monitor or a portion of the screen to record
-* 🛠️ Configurable saving location, pointer visibility, frame rate, and delay
-* 🚀 Experimental hardware-accelerated encoding
+## ✨ What's different in this fork
 
-## 😕 It Doesn't Work
+* 🎬 **Six new GPU profiles** added to the format picker — `va-h264`,
+  `va-h265`, `va-av1` (VA-API) and `nvenc-h264`, `nvenc-h265`, `nvenc-av1`
+  (NVENC). All shipped as first-class profiles, not buried behind the
+  experimental flag.
+* 🩻 **Hardware-aware UI.** Profiles whose GStreamer plugins aren't installed
+  appear in the dropdown but are dimmed and unselectable, with a tooltip
+  pointing at the missing element (e.g. *"Failed to parse videoenc bin: no
+  element 'nvh264enc'"*) — no more silent "format unavailable" surprises.
+* 🛠️ **Arch one-line installer** that detects your GPU via `lspci`, installs
+  matching VA-API / NVENC runtime packages, and builds from source. No
+  Flatpak, no manual dependency hunting.
+* 🚫 **Flatpak packaging removed.** Source build only. If you want Flatpak,
+  upstream is one fork-link away.
 
-There are many possibilities on why it may not be working. You may not have
-the runtime requirements mentioned below installed, or your distro doesn't
-support it. For troubleshooting purposes, the [screencast compatibility page](https://github.com/emersion/xdg-desktop-portal-wlr/wiki/Screencast-Compatibility)
-of `xdg-desktop-portal-wlr` wiki may help determine if your distro
-has support for it out of the box. If it does, but it still doesn't work, you
-can also check for the [troubleshooting checklist](https://github.com/emersion/xdg-desktop-portal-wlr/wiki/%22It-doesn't-work%22-Troubleshooting-Checklist).
-
-## ⚙️ Experimental Features
-
-These features are disabled by default due to stability issues and possible
-performance degradation. However, they can be enabled manually by running Kooha
-with `KOOHA_EXPERIMENTAL` env var set to `all` (e.g., `KOOHA_EXPERIMENTAL=all flatpak run io.github.seadve.Kooha`), or individually, by setting
-`KOOHA_EXPERIMENTAL` to the following keys (e.g., `KOOHA_EXPERIMENTAL=experimental-formats,window-recording`):
-
-| Feature                  | Description                                                             | Issues                    |
-| ------------------------ | ----------------------------------------------------------------------- | ------------------------- |
-| `all`                    | Enables all experimental features                                       | -                         |
-| `experimental-formats`   | Enables other codecs (e.g., hardware-accelerate encoders, VP9, and AV1) | Stability                 |
-| `multiple-video-sources` | Enables recording multiple monitor or windows                           | Stability and performance |
-| `window-recording`       | Enables recording a specific window                                     | Flickering                |
-
-## 📋 Runtime Requirements
-
-* pipewire
-* gstreamer-plugin-pipewire
-* xdg-desktop-portal
-* xdg-desktop-portal-(e.g., gtk, kde, wlr)
-
-## 🏗️ Building from source
-
-### GNOME Builder
-
-GNOME Builder is the environment used for developing this application.
-It can use Flatpak manifests to create a consistent building and running
-environment cross-distro. Thus, it is highly recommended you use it.
-
-1. Download [GNOME Builder](https://flathub.org/apps/details/org.gnome.Builder).
-2. In Builder, click the "Clone Repository" button at the bottom, using `https://github.com/SeaDve/Kooha.git` as the URL.
-3. Click the build button at the top once the project is loaded.
-
-### Meson
-
-#### Prerequisites
-
-The following packages are required to build Kooha:
-
-* meson
-* ninja
-* appstreamcli (for checks)
-* cargo
-* x264 (for MP4)
-* gstreamer
-* gstreamer-plugins-base
-* gstreamer-plugins-ugly (for MP4)
-* gstreamer-plugins-bad (for VA encoders)
-* glib2
-* gtk4
-* libadwaita
-
-#### Build Instruction
+## 🚀 Install (Arch Linux)
 
 ```shell
-git clone https://github.com/SeaDve/Kooha.git
-cd Kooha
-meson _build --prefix=/usr/local
-ninja -C _build install
+bash <(curl -fsSL https://raw.githubusercontent.com/MurderFromMars/Kooha/main/install.sh)
 ```
 
-## 📦 Third-Party Packages
+The installer will:
 
-Unlike Flatpak, take note that these packages are not officially supported by the developer.
+1. Verify you're on Arch (or an Arch derivative).
+2. Install base build + runtime dependencies via `pacman --needed`.
+3. Detect Intel / AMD / NVIDIA GPUs and add the matching VA-API or NVENC
+   driver packages. NVIDIA is only auto-handled if the proprietary kernel
+   module is already loaded; otherwise it warns rather than reaching into
+   your driver stack.
+4. Configure meson, build, and `sudo meson install` to `/usr/local`.
 
-### Repology
+Override the install prefix with `KOOHA_PREFIX=/opt`. Override the source
+directory with `KOOHA_SRC_DIR=/path/to/checkout` (otherwise the script
+clones a fresh copy to a tempdir, or builds the cwd if it's already a
+Kooha checkout).
 
-You can also check out other third-party packages on [Repology](https://repology.org/project/kooha/versions).
+After install, run `kooha`. GPU profiles appear under **Preferences → Format**.
 
-## 🙌 Help translate Kooha
+## 📋 Runtime requirements
 
-You can help Kooha translate into your native language. If you find any typos
-or think you can improve a translation, you can use the [Weblate](https://hosted.weblate.org/engage/seadve/) platform.
+The installer handles all of these, but for reference:
 
-## ☕ Support me and the project
+* `pipewire` + `gst-plugin-pipewire`
+* `xdg-desktop-portal` + a backend (`xdg-desktop-portal-gtk`, `-kde`, `-wlr`)
+* `gst-plugins-base`, `-good`, `-bad`, `-ugly` (the `-bad` plugin set
+  contains `va*enc` and `nv*enc` for hardware encoding)
+* GPU userspace driver matching your hardware (`intel-media-driver`,
+  `libva-mesa-driver`, or `libva-nvidia-driver`)
 
-Kooha is free and will always be for everyone to use. If you like the project and
-would like to support it, you may donate [here](https://seadve.github.io/donate/).
+## 🎚️ How GPU profile selection works
 
-## 💝 Acknowledgment
+Open **Preferences → Format** to see the full profile list. Each profile is
+backed by a GStreamer pipeline; if the corresponding encoder element is
+missing on your system, the profile is shown but greyed out with a tooltip
+explaining what's missing. Install the named plugin (or driver), restart
+Kooha, and it lights up.
 
-I would like to express my gratitude to the [contributors](https://github.com/SeaDve/Kooha/graphs/contributors)
-and [translators](https://hosted.weblate.org/engage/seadve/) of the project.
+| Profile        | Container | Encoder element  | Typical hardware             |
+| -------------- | --------- | ---------------- | ---------------------------- |
+| `va-h264`      | MP4       | `vah264enc`      | Intel iGPU / AMD via Mesa    |
+| `va-h265`      | MP4       | `vah265enc`      | Intel iGPU / AMD via Mesa    |
+| `va-av1`       | Matroska  | `vaav1enc`       | Intel Arc / RDNA3+ AMD       |
+| `nvenc-h264`   | MP4       | `nvh264enc`      | NVIDIA + proprietary driver  |
+| `nvenc-h265`   | MP4       | `nvh265enc`      | NVIDIA + proprietary driver  |
+| `nvenc-av1`    | Matroska  | `nvav1enc`       | NVIDIA Ada (40-series) +     |
 
-I would also like to thank the open-source software projects, libraries, and APIs that were
-used in developing this app, such as GStreamer, GTK, LibAdwaita, and many others, for making Kooha possible.
+The original CPU-encoded profiles (`webm-vp8`, `mp4`/`x264`, `matroska-h264`,
+`gif`) are unchanged.
 
-I would also like to acknowledge [RecApp](https://github.com/amikha1lov/RecApp), which greatly inspired the creation of Kooha,
-as well as [GNOME Screenshot](https://gitlab.gnome.org/GNOME/gnome-screenshot), which served as a reference for Kooha's icon
-design.
+## ⚙️ Experimental features
+
+Set `KOOHA_EXPERIMENTAL` to one or more of these keys to enable:
+
+| Key                      | What it unlocks                                     |
+| ------------------------ | --------------------------------------------------- |
+| `all`                    | All experimental features                           |
+| `experimental-formats`   | Software VP9 / AV1 (`webm-vp9`, `webm-av1`)         |
+| `multiple-video-sources` | Recording multiple monitors or windows              |
+| `window-recording`       | Recording a single window (flickers on some setups) |
+
+```shell
+KOOHA_EXPERIMENTAL=experimental-formats kooha
+```
+
+GPU-accelerated profiles are no longer gated by this flag in this fork —
+they're always visible, with availability gating handled by the UI.
+
+## 🏗️ Manual build (no installer)
+
+If you'd rather drive meson by hand:
+
+```shell
+git clone https://github.com/MurderFromMars/Kooha.git
+cd Kooha
+
+# install build deps yourself, then:
+meson setup _build --prefix=/usr/local --buildtype=release
+meson compile -C _build
+sudo meson install -C _build
+```
+
+Build dependencies: `meson`, `ninja`, `cargo`/`rust`, `pkgconf`, `glib2`,
+`gtk4` (≥ 4.15.3), `libadwaita` (≥ 1.9), `gstreamer` (≥ 1.24),
+`gst-plugins-base` (≥ 1.24), and the GStreamer plugin sets listed under
+runtime requirements above. `appstream` is optional (used for AppData
+validation).
+
+## 😕 It doesn't work
+
+* **Screencast portal can't find a backend** → install
+  `xdg-desktop-portal-gtk`, `-kde`, or `-wlr` for your compositor and check
+  the [xdg-desktop-portal-wlr troubleshooting checklist](https://github.com/emersion/xdg-desktop-portal-wlr/wiki/%22It-doesn't-work%22-Troubleshooting-Checklist).
+* **GPU profile is dimmed** → hover for the missing-element tooltip. Most
+  often you need `gst-plugins-bad` or the right userspace VA-API driver
+  (`intel-media-driver`, `libva-mesa-driver`, `libva-nvidia-driver`).
+  Check with `vainfo` after install.
+* **NVENC profile dimmed despite NVIDIA GPU** → NVENC requires the
+  proprietary `nvidia` (or `nvidia-dkms`) driver and `nvidia-utils`. The
+  open-source nouveau stack does not expose NVENC.
+
+## 💝 Credit
+
+Kooha is the work of [Dave Patrick Caberto (@SeaDve)](https://github.com/SeaDve)
+and [contributors](https://github.com/SeaDve/Kooha/graphs/contributors). This
+fork is a thin layer over a great app — please [donate to upstream](https://seadve.github.io/donate/)
+if you get value out of it.
+
+Translations are maintained on upstream's [Weblate](https://hosted.weblate.org/engage/seadve/).
+This fork inherits them; new strings introduced here are English-only for
+now.
+
+## 📄 License
+
+GPL-3.0-or-later, same as upstream.

@@ -125,11 +125,18 @@ impl Profile {
     }
 
     pub fn is_available(&self) -> bool {
+        self.unavailability_reason().is_none()
+    }
+
+    /// Returns `None` if the profile can be built, otherwise a human-readable
+    /// reason explaining which GStreamer element is missing.
+    pub fn unavailability_reason(&self) -> Option<String> {
         self.is_available_inner()
             .inspect_err(|err| {
                 tracing::debug!("Profile `{}` is not available: {:?}", self.id(), err);
             })
-            .is_ok()
+            .err()
+            .map(|err| format!("{:#}", err))
     }
 
     fn is_available_inner(&self) -> Result<()> {
