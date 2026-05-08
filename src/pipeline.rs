@@ -26,8 +26,12 @@ const VIDEOENC_QUEUE_BYTES_CEILING: u32 = 1_536 * 1024 * 1024;
 /// Floor so very low resolutions still get a meaningful buffer.
 const VIDEOENC_QUEUE_BYTES_FLOOR: u32 = 64 * 1024 * 1024;
 /// Fallback frame size used when stream dimensions aren't reported by the
-/// portal — 1080p `BGRx`, the most common desktop case.
-const VIDEOENC_QUEUE_FALLBACK_FRAME_BYTES: u64 = 1920 * 1080 * 4;
+/// portal — 4K `BGRx`. Sized large because the portal's reported stream size
+/// can lie (e.g. `KWin` advertises 1080p logical even when delivering 4K),
+/// and over-provisioning the byte cap costs nothing — the queue only holds
+/// the buffers actually pushed into it. The cap is re-tightened from the
+/// real negotiated caps via a pad probe once the first caps event flows.
+const VIDEOENC_QUEUE_FALLBACK_FRAME_BYTES: u64 = 3840 * 2160 * 4;
 
 #[derive(Debug)]
 #[must_use]
@@ -124,25 +128,26 @@ impl PipelineBuilder {
             self.resolution_height,
         )
         .context("Failed to create videosrc bin")?;
-        let videoenc_queue_max_bytes = compute_videoenc_queue_max_bytes(
+        let videoenc_queue_initial_max_bytes = compute_videoenc_queue_max_bytes(
             &self.streams,
             self.framerate,
             VIDEOENC_QUEUE_TARGET_SECONDS,
         );
         tracing::debug!(
-            videoenc_queue_max_bytes,
+            videoenc_queue_max_bytes = videoenc_queue_initial_max_bytes,
             target_seconds = VIDEOENC_QUEUE_TARGET_SECONDS,
-            "Sized kooha-videoenc-queue"
+            "Sized kooha-videoenc-queue (initial; will be re-tightened from negotiated caps)"
         );
         let videoenc_queue = gst::ElementFactory::make("queue")
             .name("kooha-videoenc-queue")
             .property("max-size-buffers", 0u32)
-            .property("max-size-bytes", videoenc_queue_max_bytes)
+            .property("max-size-bytes", videoenc_queue_initial_max_bytes)
             .property(
                 "max-size-time",
                 VIDEOENC_QUEUE_TARGET_SECONDS * gst::ClockTime::SECOND.nseconds(),
             )
             .build()?;
+        attach_videoenc_queue_resize_probe(&videoenc_queue, self.framerate);
         let filesink = gst::ElementFactory::make("filesink")
             .property(
                 "location",
@@ -404,9 +409,75 @@ pub fn make_videosrc_bin(
     Ok(bin)
 }
 
+/// Installs a one-shot pad probe on the queue's sink. The portal's reported
+/// stream size is unreliable on `KWin` (advertises logical 1080p while
+/// delivering 4K via DMABUF), so the right resolution is whatever ends up
+/// in the negotiated caps. On the first downstream caps event we recompute
+/// `max-size-bytes` from the real frame dimensions and remove the probe.
+fn attach_videoenc_queue_resize_probe(queue: &gst::Element, framerate: gst::Fraction) {
+    let Some(sink_pad) = queue.static_pad("sink") else {
+        tracing::warn!("kooha-videoenc-queue has no sink pad; skipping resize probe");
+        return;
+    };
+    let queue_for_probe = queue.clone();
+    sink_pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |_pad, info| {
+        let Some(gst::PadProbeData::Event(ref event)) = info.data else {
+            return gst::PadProbeReturn::Ok;
+        };
+        let gst::EventView::Caps(caps_event) = event.view() else {
+            return gst::PadProbeReturn::Ok;
+        };
+        let caps = caps_event.caps();
+        let Some(s) = caps.structure(0) else {
+            return gst::PadProbeReturn::Ok;
+        };
+        let Some(width) = s.get::<i32>("width").ok() else {
+            return gst::PadProbeReturn::Ok;
+        };
+        let Some(height) = s.get::<i32>("height").ok() else {
+            return gst::PadProbeReturn::Ok;
+        };
+        if width <= 0 || height <= 0 {
+            return gst::PadProbeReturn::Ok;
+        }
+
+        let frame_bytes = (width as u64) * (height as u64) * 4;
+        let fps = (framerate.numer() as f64 / framerate.denom().max(1) as f64).ceil() as u64;
+        let needed = frame_bytes
+            .saturating_mul(fps.max(1))
+            .saturating_mul(VIDEOENC_QUEUE_TARGET_SECONDS);
+        let new_max = needed.clamp(
+            VIDEOENC_QUEUE_BYTES_FLOOR as u64,
+            VIDEOENC_QUEUE_BYTES_CEILING as u64,
+        ) as u32;
+
+        let current_max = queue_for_probe.property::<u32>("max-size-bytes");
+        if new_max == current_max {
+            tracing::debug!(
+                width,
+                height,
+                max_bytes = new_max,
+                "kooha-videoenc-queue already correctly sized"
+            );
+        } else {
+            tracing::debug!(
+                width,
+                height,
+                old_max_bytes = current_max,
+                new_max_bytes = new_max,
+                "Resized kooha-videoenc-queue from negotiated caps"
+            );
+            queue_for_probe.set_property("max-size-bytes", new_max);
+        }
+
+        gst::PadProbeReturn::Remove
+    });
+}
+
 /// Estimates the composited raw-video frame size in bytes (`BGRx` = 4 bytes
-/// per pixel). Falls back to a 1080p estimate when stream dimensions are
-/// unknown so the queue still gets a sensible byte cap.
+/// per pixel). Falls back to a 4K estimate when stream dimensions are
+/// unknown so the queue is sized for the worst common case until the real
+/// caps land.
 fn estimated_frame_bytes(streams: &[Stream]) -> u64 {
     match streams {
         [single] => single.size().map_or(VIDEOENC_QUEUE_FALLBACK_FRAME_BYTES, |(w, h)| {
