@@ -301,11 +301,15 @@ fn make_videocrop(data: &SelectAreaData) -> Result<gst::Element> {
 
 /// Creates a bin with a src pad for multiple pipewire streams.
 ///
-/// Single stream:
+/// Single stream (no `videoflip`! it only accepts sysmem and would force a
+/// DMABUF→sysmem map at the source, killing the GL/CUDA zero-copy path
+/// downstream — `pipewiresrc`'s output is already correctly oriented on
+/// every desktop portal we care about):
 ///
-/// pipewiresrc -> videoflip -> [videoscale -> capsfilter] -> videorate
+/// pipewiresrc -> [videoscale -> capsfilter] -> videorate
 ///
-/// Multiple streams:
+/// Multiple streams (`compositor` only accepts sysmem, so this path is
+/// inherently CPU; `videoflip` stays here because it costs nothing extra):
 ///
 /// pipewiresrc1 -> videoflip -> |
 ///                              |
@@ -364,9 +368,8 @@ pub fn make_videosrc_bin(
         [] => bail!("No streams provided"),
         [stream] => {
             let pipewiresrc = make_pipewiresrc(fd, &stream.node_id().to_string())?;
-            let videoflip = make_videoflip()?;
-            bin.add_many([&pipewiresrc, &videoflip])?;
-            gst::Element::link_many([&pipewiresrc, &videoflip, &scale_sink])?;
+            bin.add(&pipewiresrc)?;
+            pipewiresrc.link(&scale_sink)?;
         }
         streams => {
             let compositor = gst::ElementFactory::make("compositor").build()?;

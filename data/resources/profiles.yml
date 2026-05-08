@@ -150,6 +150,7 @@ supported:
     name: MP4 (NVENC H.264)
     extension: mp4
     videoenc: >
+      glupload !
       cudaupload !
       nvh264enc preset=p4 tune=low-latency rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=60 bframes=0 zerolatency=true !
       queue !
@@ -173,6 +174,7 @@ supported:
     name: MP4 (NVENC H.265)
     extension: mp4
     videoenc: >
+      glupload !
       cudaupload !
       nvh265enc preset=p4 tune=low-latency rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=60 bframes=0 zerolatency=true !
       queue !
@@ -196,6 +198,7 @@ supported:
     name: Matroska (NVENC AV1)
     extension: mkv
     videoenc: >
+      glupload !
       cudaupload !
       nvav1enc preset=p4 tune=low-latency rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=60 bframes=0 zerolatency=true !
       queue !
