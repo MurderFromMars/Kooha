@@ -32,6 +32,10 @@ static BUILTIN_FRAMERATES: &[gst::Fraction] = &[
     gst::Fraction::from_integer(50),
     gst::Fraction::new_raw(60_000, 1001), // 59.94
     gst::Fraction::from_integer(60),
+    gst::Fraction::from_integer(90),
+    gst::Fraction::from_integer(120),
+    gst::Fraction::from_integer(144),
+    gst::Fraction::from_integer(240),
 ];
 
 const ROW_SELECTED_ITEM_NOTIFY_HANDLER_ID_KEY: &str = "kooha-row-selected-item-notify-handler-id";
