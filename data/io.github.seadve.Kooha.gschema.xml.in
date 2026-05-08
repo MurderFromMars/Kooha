@@ -29,6 +29,17 @@
     <key type="(ii)" name="framerate">
       <default>(30, 1)</default>
     </key>
+    <key type="u" name="resolution-height">
+      <default>0</default>
+      <summary>Target output height in pixels; 0 means use source resolution.</summary>
+    </key>
+    <key type="s" name="audio-codec">
+      <choices>
+        <choice value="opus"/>
+        <choice value="aac"/>
+      </choices>
+      <default>"opus"</default>
+    </key>
     <key type="s" name="screencast-restore-token">
       <default>""</default>
     </key>

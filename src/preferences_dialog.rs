@@ -8,8 +8,18 @@ use gtk::{
 };
 
 use crate::{
-    experimental::Feature, format, item_row::ItemRow, profile::Profile, settings::Settings,
+    experimental::Feature,
+    format,
+    item_row::ItemRow,
+    profile::Profile,
+    settings::{AudioCodec, Settings},
 };
+
+/// Output heights offered in the resolution combo. `0` means "use source resolution".
+const BUILTIN_RESOLUTION_HEIGHTS: &[u32] = &[0, 2160, 1440, 1080, 720, 480];
+
+/// Audio codecs offered in the codec combo, in display order.
+const BUILTIN_AUDIO_CODECS: &[AudioCodec] = &[AudioCodec::Opus, AudioCodec::Aac];
 
 static BUILTIN_FRAMERATES: &[gst::Fraction] = &[
     gst::Fraction::from_integer(10),
@@ -50,6 +60,10 @@ mod imp {
         pub(super) profile_row: TemplateChild<adw::ComboRow>,
         #[template_child]
         pub(super) framerate_row: TemplateChild<adw::ComboRow>,
+        #[template_child]
+        pub(super) resolution_row: TemplateChild<adw::ComboRow>,
+        #[template_child]
+        pub(super) audio_codec_row: TemplateChild<adw::ComboRow>,
     }
 
     #[glib::object_subclass]
@@ -119,10 +133,26 @@ mod imp {
                     obj.update_framerate_row_selected();
                 }
             ));
+            settings.connect_resolution_height_changed(clone!(
+                #[weak]
+                obj,
+                move |_| {
+                    obj.update_resolution_row_selected();
+                }
+            ));
+            settings.connect_audio_codec_changed(clone!(
+                #[weak]
+                obj,
+                move |_| {
+                    obj.update_audio_codec_row_selected();
+                }
+            ));
 
             obj.update_file_chooser_label();
             obj.update_profile_row_selected();
             obj.update_framerate_row_selected();
+            obj.update_resolution_row_selected();
+            obj.update_audio_codec_row_selected();
 
             // Load last active value first in `update_*_row` before connecting to
             // the signal to avoid unnecessary updates.
@@ -146,6 +176,28 @@ mod imp {
                             .unwrap()
                             .borrow::<gst::Fraction>();
                         obj.settings().set_framerate(*framerate);
+                    }
+                }
+            ));
+            self.resolution_row.connect_selected_item_notify(clone!(
+                #[weak]
+                obj,
+                move |row| {
+                    let position = row.selected();
+                    if let Some(&height) =
+                        BUILTIN_RESOLUTION_HEIGHTS.get(position as usize)
+                    {
+                        obj.settings().set_resolution_height(height);
+                    }
+                }
+            ));
+            self.audio_codec_row.connect_selected_item_notify(clone!(
+                #[weak]
+                obj,
+                move |row| {
+                    let position = row.selected();
+                    if let Some(&codec) = BUILTIN_AUDIO_CODECS.get(position as usize) {
+                        obj.settings().set_audio_codec(codec);
                     }
                 }
             ));
@@ -224,6 +276,28 @@ impl PreferencesDialog {
                 framerate
             );
         }
+    }
+
+    fn update_resolution_row_selected(&self) {
+        let imp = self.imp();
+
+        let height = self.settings().resolution_height();
+        let position = BUILTIN_RESOLUTION_HEIGHTS
+            .iter()
+            .position(|h| *h == height)
+            .unwrap_or(0);
+        imp.resolution_row.set_selected(position as u32);
+    }
+
+    fn update_audio_codec_row_selected(&self) {
+        let imp = self.imp();
+
+        let codec = self.settings().audio_codec();
+        let position = BUILTIN_AUDIO_CODECS
+            .iter()
+            .position(|c| *c == codec)
+            .unwrap_or(0);
+        imp.audio_codec_row.set_selected(position as u32);
     }
 
     fn setup_rows(&self) {
@@ -352,6 +426,40 @@ impl PreferencesDialog {
         });
         let profile_filter_model = gtk::FilterListModel::new(Some(profile_model), Some(filter));
         imp.profile_row.set_model(Some(&profile_filter_model));
+
+        let resolution_model = gtk::StringList::new(
+            &BUILTIN_RESOLUTION_HEIGHTS
+                .iter()
+                .map(|h| resolution_label(*h))
+                .collect::<Vec<_>>()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        );
+        imp.resolution_row.set_model(Some(&resolution_model));
+
+        let audio_codec_model = gtk::StringList::new(
+            &BUILTIN_AUDIO_CODECS
+                .iter()
+                .map(|c| audio_codec_label(*c))
+                .collect::<Vec<_>>(),
+        );
+        imp.audio_codec_row.set_model(Some(&audio_codec_model));
+    }
+}
+
+fn resolution_label(height: u32) -> String {
+    if height == 0 {
+        gettext("Source")
+    } else {
+        format!("{}p", height)
+    }
+}
+
+fn audio_codec_label(codec: AudioCodec) -> &'static str {
+    match codec {
+        AudioCodec::Opus => "Opus",
+        AudioCodec::Aac => "AAC",
     }
 }
 

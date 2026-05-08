@@ -27,6 +27,21 @@ intentionally drops Flatpak packaging in favour of a clean source build.
   `va-h265`, `va-av1` (VA-API) and `nvenc-h264`, `nvenc-h265`, `nvenc-av1`
   (NVENC). All shipped as first-class profiles, not buried behind the
   experimental flag.
+* 🎯 **Tuned for stutter-free recording.** Hardware encoders ship with
+  explicit constant-QP rate control, low-latency presets, B-frames disabled,
+  and a 1-second keyframe interval — no more relying on driver defaults that
+  produce choppy output. Quality is matched to the CPU-encoded profiles.
+* ⚡ **GPU-bound NVENC pipeline.** The CPU `videoconvert` step has been
+  removed from every NVENC profile in favour of `cudaupload` straight into
+  the encoder; colorspace conversion happens inside NVENC on the GPU. Frees
+  up CPU for your game while recording.
+* 📐 **Resolution preference.** New **Preferences → Resolution** combo:
+  Source / 2160p / 1440p / 1080p / 720p / 480p. Width auto-scales to
+  preserve aspect ratio. Useful for trimming file size without re-encoding.
+* 🔊 **Audio codec preference.** New **Preferences → Audio → Codec**
+  switcher between Opus and AAC. AAC writes universally-playable MP4s; Opus
+  stays the default for Matroska/WebM. WebM ignores the choice (only legal
+  audio is Opus).
 * 🩻 **Hardware-aware UI.** Profiles whose GStreamer plugins aren't installed
   appear in the dropdown but are dimmed and unselectable, with a tooltip
   pointing at the missing element (e.g. *"Failed to parse videoenc bin: no
@@ -58,7 +73,8 @@ directory with `KOOHA_SRC_DIR=/path/to/checkout` (otherwise the script
 clones a fresh copy to a tempdir, or builds the cwd if it's already a
 Kooha checkout).
 
-After install, run `kooha`. GPU profiles appear under **Preferences → Format**.
+After install, run `kooha`. GPU profiles appear under **Preferences → Format**;
+resolution and audio codec live in the same Preferences page.
 
 ## 📋 Runtime requirements
 
@@ -89,7 +105,21 @@ Kooha, and it lights up.
 | `nvenc-av1`    | Matroska  | `nvav1enc`       | NVIDIA Ada (40-series) +     |
 
 The original CPU-encoded profiles (`webm-vp8`, `mp4`/`x264`, `matroska-h264`,
-`gif`) are unchanged.
+`gif`) keep their existing video pipelines; their audio half now honours the
+codec preference where the muxer permits it (MP4 and Matroska accept both
+Opus and AAC; WebM is locked to Opus).
+
+### Tuning the GPU encoders
+
+If you want to tweak the defaults, the knobs live in
+[`data/resources/profiles.yml`](data/resources/profiles.yml). Common changes:
+
+| Want                                     | Change                                          |
+| ---------------------------------------- | ----------------------------------------------- |
+| Smaller files, slightly worse quality    | `qp-const-i/p/b=22` → `24`–`26` (NVENC) or `qpi/qpp/qpb` for VA-API |
+| Faster encode on a weaker GPU            | `preset=p4` → `p2` or `p3` (NVENC)              |
+| Better quality on a strong GPU           | `preset=p4` → `p5` or `p6` (NVENC)              |
+| Sparser keyframes for smaller GOPs       | `gop-size=60` / `key-int-max=60` → `120`        |
 
 ## ⚙️ Experimental features
 

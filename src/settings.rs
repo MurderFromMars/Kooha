@@ -12,6 +12,30 @@ use crate::{
     profile::Profile,
 };
 
+/// Audio codec for the recording. Mirrors the `audio-codec` `GSettings` key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioCodec {
+    Opus,
+    Aac,
+}
+
+impl AudioCodec {
+    /// Settings-key string form.
+    pub fn as_id(self) -> &'static str {
+        match self {
+            Self::Opus => "opus",
+            Self::Aac => "aac",
+        }
+    }
+
+    fn from_id(id: &str) -> Self {
+        match id {
+            "aac" => Self::Aac,
+            _ => Self::Opus,
+        }
+    }
+}
+
 #[gen_settings(file = "./data/io.github.seadve.Kooha.gschema.xml.in")]
 #[gen_settings_define(key_name = "selection", arg_type = "Selection", ret_type = "Selection")]
 #[gen_settings_define(
@@ -23,6 +47,7 @@ use crate::{
 #[gen_settings_skip(key_name = "framerate")]
 #[gen_settings_skip(key_name = "record-delay")]
 #[gen_settings_skip(key_name = "profile-id")]
+#[gen_settings_skip(key_name = "audio-codec")]
 pub struct Settings;
 
 impl Default for Settings {
@@ -147,6 +172,24 @@ impl Settings {
 
     pub fn reset_profile(&self) {
         self.0.reset("profile-id");
+    }
+
+    pub fn audio_codec(&self) -> AudioCodec {
+        AudioCodec::from_id(&self.0.get::<String>("audio-codec"))
+    }
+
+    pub fn set_audio_codec(&self, codec: AudioCodec) {
+        self.0.set_string("audio-codec", codec.as_id()).unwrap();
+    }
+
+    pub fn connect_audio_codec_changed(
+        &self,
+        f: impl Fn(&Self) + 'static,
+    ) -> glib::SignalHandlerId {
+        self.0
+            .connect_changed(Some("audio-codec"), move |settings, _| {
+                f(&Self(settings.clone()));
+            })
     }
 }
 

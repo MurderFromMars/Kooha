@@ -208,6 +208,8 @@ impl Recording {
             raw_fd,
             streams.clone(),
         );
+        pipeline_builder.resolution_height(settings.resolution_height());
+        pipeline_builder.audio_codec_id(settings.audio_codec().as_id());
 
         // Select area
         if settings.capture_mode() == CaptureMode::Selection {

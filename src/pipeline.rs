@@ -24,6 +24,8 @@ pub struct PipelineBuilder {
     record_desktop_audio: bool,
     record_microphone: bool,
     select_area_data: Option<SelectAreaData>,
+    resolution_height: u32,
+    audio_codec_id: String,
 }
 
 impl PipelineBuilder {
@@ -43,7 +45,22 @@ impl PipelineBuilder {
             record_desktop_audio: false,
             record_microphone: false,
             select_area_data: None,
+            resolution_height: 0,
+            audio_codec_id: String::new(),
         }
+    }
+
+    /// Sets the target output height. `0` means use the source resolution.
+    pub fn resolution_height(&mut self, height: u32) -> &mut Self {
+        self.resolution_height = height;
+        self
+    }
+
+    /// Sets the preferred audio codec id (e.g. "opus", "aac"). The profile
+    /// silently falls back to its first listed codec when this isn't supported.
+    pub fn audio_codec_id(&mut self, id: impl Into<String>) -> &mut Self {
+        self.audio_codec_id = id.into();
+        self
     }
 
     pub fn record_desktop_audio(&mut self, record_desktop_audio: bool) -> &mut Self {
@@ -84,8 +101,13 @@ impl PipelineBuilder {
 
         let pipeline = gst::Pipeline::new();
 
-        let videosrc_bin = make_videosrc_bin(self.fd, &self.streams, self.framerate)
-            .context("Failed to create videosrc bin")?;
+        let videosrc_bin = make_videosrc_bin(
+            self.fd,
+            &self.streams,
+            self.framerate,
+            self.resolution_height,
+        )
+        .context("Failed to create videosrc bin")?;
         let videoenc_queue = gst::ElementFactory::make("queue")
             .name("kooha-videoenc-queue")
             .build()?;
@@ -152,6 +174,7 @@ impl PipelineBuilder {
                 &videoenc_queue,
                 audioenc_queue.as_ref(),
                 &filesink,
+                &self.audio_codec_id,
             )
             .with_context(|| {
                 format!(
@@ -248,19 +271,23 @@ fn make_videocrop(data: &SelectAreaData) -> Result<gst::Element> {
 ///
 /// Single stream:
 ///
-/// pipewiresrc -> videoflip -> videorate
+/// pipewiresrc -> videoflip -> [videoscale -> capsfilter] -> videorate
 ///
 /// Multiple streams:
 ///
 /// pipewiresrc1 -> videoflip -> |
 ///                              |
-/// pipewiresrc2 -> videoflip -> | -> compositor -> videorate
+/// pipewiresrc2 -> videoflip -> | -> compositor -> [videoscale -> capsfilter] -> videorate
 ///                              |
 /// pipewiresrcn -> videoflip -> |
+///
+/// The optional videoscale + capsfilter pair is inserted only when
+/// `resolution_height` is non-zero and would actually downscale the source.
 pub fn make_videosrc_bin(
     fd: RawFd,
     streams: &[Stream],
     framerate: gst::Fraction,
+    resolution_height: u32,
 ) -> Result<gst::Bin> {
     // TODO Create a bin that hotswaps compositor depending whether gl is supported or not.
 
@@ -280,18 +307,39 @@ pub fn make_videosrc_bin(
     bin.add_many([&videorate, &videorate_capsfilter])?;
     videorate.link(&videorate_capsfilter)?;
 
+    let scale_target_size = composited_target_size(streams, resolution_height);
+    let scale_sink: gst::Element = if let Some((target_w, target_h)) = scale_target_size {
+        let videoscale = gst::ElementFactory::make("videoscale").build()?;
+        let scale_capsfilter = gst::ElementFactory::make("capsfilter")
+            .property(
+                "caps",
+                gst::Caps::builder("video/x-raw")
+                    .field("width", target_w)
+                    .field("height", target_h)
+                    .field("pixel-aspect-ratio", gst::Fraction::from_integer(1))
+                    .build(),
+            )
+            .build()?;
+        bin.add_many([&videoscale, &scale_capsfilter])?;
+        videoscale.link(&scale_capsfilter)?;
+        scale_capsfilter.link(&videorate)?;
+        videoscale
+    } else {
+        videorate.clone()
+    };
+
     match streams {
         [] => bail!("No streams provided"),
         [stream] => {
             let pipewiresrc = make_pipewiresrc(fd, &stream.node_id().to_string())?;
             let videoflip = make_videoflip()?;
             bin.add_many([&pipewiresrc, &videoflip])?;
-            gst::Element::link_many([&pipewiresrc, &videoflip, &videorate])?;
+            gst::Element::link_many([&pipewiresrc, &videoflip, &scale_sink])?;
         }
         streams => {
             let compositor = gst::ElementFactory::make("compositor").build()?;
             bin.add(&compositor)?;
-            compositor.link(&videorate)?;
+            compositor.link(&scale_sink)?;
 
             let mut last_pos = 0;
             for stream in streams {
@@ -319,6 +367,39 @@ pub fn make_videosrc_bin(
     bin.add_pad(&gst::GhostPad::with_target(&src_pad)?)?;
 
     Ok(bin)
+}
+
+/// Computes the target (width, height) for downscaling. Returns `None` when
+/// scaling shouldn't happen — either no target was requested, the source size
+/// is unknown, or the requested height isn't smaller than the source.
+fn composited_target_size(streams: &[Stream], target_height: u32) -> Option<(i32, i32)> {
+    if target_height == 0 {
+        return None;
+    }
+    let target_h = target_height as i32;
+
+    let (src_w, src_h) = match streams {
+        [single] => single.size()?,
+        many if !many.is_empty() => {
+            let mut total_w = 0i32;
+            let mut max_h = 0i32;
+            for s in many {
+                let (w, h) = s.size()?;
+                total_w += w;
+                max_h = max_h.max(h);
+            }
+            (total_w, max_h)
+        }
+        _ => return None,
+    };
+
+    if target_h >= src_h {
+        return None;
+    }
+
+    let scale = target_h as f64 / src_h as f64;
+    let target_w = (src_w as f64 * scale).round() as i32 & !1;
+    Some((target_w.max(2), target_h))
 }
 
 /// Creates a new audio src element with the given name.

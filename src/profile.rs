@@ -17,6 +17,13 @@ struct Profiles {
 }
 
 #[derive(Debug, Deserialize)]
+struct AudioCodecData {
+    id: String,
+    #[serde(rename = "enc")]
+    enc_bin_str: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct ProfileData {
     id: String,
     #[serde(default)]
@@ -28,8 +35,10 @@ struct ProfileData {
     file_extension: String,
     #[serde(rename = "videoenc")]
     videoenc_bin_str: String,
-    #[serde(rename = "audioenc")]
-    audioenc_bin_str: Option<String>,
+    /// Ordered list of audio codec encoder bins keyed by id (e.g. "opus", "aac").
+    /// The first entry is used when the user-selected codec is not listed.
+    #[serde(default)]
+    audio: Vec<AudioCodecData>,
     #[serde(rename = "muxer")]
     muxer_bin_str: Option<String>,
 }
@@ -110,7 +119,25 @@ impl Profile {
     }
 
     pub fn supports_audio(&self) -> bool {
-        self.data().audioenc_bin_str.is_some()
+        !self.data().audio.is_empty()
+    }
+
+    /// Returns the audio codec ids this profile supports, in declared order.
+    /// The first entry is the fallback used when the user-selected codec is
+    /// not in the list.
+    pub fn audio_codec_ids(&self) -> impl Iterator<Item = &str> {
+        self.data().audio.iter().map(|a| a.id.as_str())
+    }
+
+    /// Picks the encoder bin string for the given codec preference, or the
+    /// first available codec if the preference isn't supported.
+    fn pick_audio_enc_bin_str(&self, preferred_codec: &str) -> Option<&str> {
+        let audio = &self.data().audio;
+        audio
+            .iter()
+            .find(|a| a.id == preferred_codec)
+            .or_else(|| audio.first())
+            .map(|a| a.enc_bin_str.as_str())
     }
 
     pub fn suggested_max_framerate(&self) -> gst::Fraction {
@@ -142,8 +169,9 @@ impl Profile {
     fn is_available_inner(&self) -> Result<()> {
         parse_bin_test(&self.data().videoenc_bin_str).context("Failed to parse videoenc bin")?;
 
-        if let Some(audioenc_bin_str) = &self.data().audioenc_bin_str {
-            parse_bin_test(audioenc_bin_str).context("Failed to parse audioenc bin")?;
+        for codec in &self.data().audio {
+            parse_bin_test(&codec.enc_bin_str)
+                .with_context(|| format!("Failed to parse audioenc bin for `{}`", codec.id))?;
         }
 
         if let Some(muxer_bin_str) = &self.data().muxer_bin_str {
@@ -159,6 +187,7 @@ impl Profile {
         video_src: &gst::Element,
         audio_srcs: Option<&gst::Element>,
         sink: &gst::Element,
+        preferred_audio_codec: &str,
     ) -> Result<()> {
         let videoenc_bin = parse_bin("kooha-videoenc-bin", &self.data().videoenc_bin_str)?;
         debug_assert!(videoenc_bin.iterate_elements().into_iter().any(|element| {
@@ -169,7 +198,9 @@ impl Profile {
         pipeline.add(&videoenc_bin)?;
         video_src.link(&videoenc_bin)?;
 
-        match (&self.data().audioenc_bin_str, &self.data().muxer_bin_str) {
+        let audioenc_bin_str = self.pick_audio_enc_bin_str(preferred_audio_codec);
+
+        match (audioenc_bin_str, &self.data().muxer_bin_str) {
             (None, None) => {
                 // Special case for gifenc
 
@@ -196,7 +227,6 @@ impl Profile {
 
                 if let Some(audio_srcs) = audio_srcs {
                     let audioenc_str = audioenc_str
-                        .as_ref()
                         .context("Failed to handle audio srcs: Profile has no audio encoder")?;
                     let audioenc_bin = parse_bin("kooha-audioenc-bin", audioenc_str)?;
                     debug_assert!(audioenc_bin.iterate_elements().into_iter().any(|element| {
@@ -325,6 +355,7 @@ mod tests {
                 &dummy_video_src,
                 dummy_audio_src.as_ref(),
                 &dummy_sink,
+                "opus",
             ) {
                 panic!("can't attach profile `{}`: {:?}", profile.id(), err);
             }

@@ -1,6 +1,8 @@
 # Note:
-# - videoenc and audioenc will be connected directly to the muxer
-# - audioenc and muxer are optional, but if audioenc is set, muxer must also be set
+# - videoenc and audio entries will be connected directly to the muxer
+# - audio and muxer are optional, but if audio is set, muxer must also be set
+# - audio is an ordered list of {id, enc} entries; the user-selected codec is
+#   used if its id is present, otherwise the first listed entry is used
 # - ${N_THREADS} will be replaced with ideal thread count
 # - default suggested-max-fps is 60
 
@@ -12,10 +14,12 @@ supported:
       videoconvert chroma-mode=none dither=none matrix-mode=output-only n-threads=${N_THREADS} !
       vp8enc max-quantizer=17 cpu-used=16 deadline=1 static-threshold=100 keyframe-mode=disabled buffer-size=20000 threads=${N_THREADS} !
       queue
-    audioenc: >
-      audioconvert !
-      opusenc !
-      queue
+    audio:
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc !
+          queue
     muxer: webmmux
 
   - id: mp4
@@ -27,11 +31,19 @@ supported:
       capsfilter caps=video/x-h264,profile=baseline !
       queue !
       h264parse
-    audioenc: >
-      audioconvert !
-      lamemp3enc !
-      queue !
-      mpegaudioparse
+    audio:
+      - id: aac
+        enc: >
+          audioconvert !
+          avenc_aac bitrate=128000 !
+          aacparse !
+          queue
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc bitrate=128000 !
+          opusparse !
+          queue
     muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
 
   - id: matroska-h264
@@ -43,10 +55,18 @@ supported:
       capsfilter caps=video/x-h264,profile=baseline !
       queue !
       h264parse
-    audioenc: >
-      audioconvert !
-      opusenc !
-      queue
+    audio:
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc !
+          queue
+      - id: aac
+        enc: >
+          audioconvert !
+          avenc_aac bitrate=128000 !
+          aacparse !
+          queue
     muxer: matroskamux
 
   - id: gif
@@ -63,14 +83,22 @@ supported:
     extension: mp4
     videoenc: >
       vapostproc !
-      vah264enc !
+      vah264enc rate-control=cqp qpi=22 qpp=22 qpb=22 b-frames=0 key-int-max=60 !
       queue !
       h264parse
-    audioenc: >
-      audioconvert !
-      lamemp3enc !
-      queue !
-      mpegaudioparse
+    audio:
+      - id: aac
+        enc: >
+          audioconvert !
+          avenc_aac bitrate=128000 !
+          aacparse !
+          queue
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc bitrate=128000 !
+          opusparse !
+          queue
     muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
 
   - id: va-h265
@@ -78,14 +106,22 @@ supported:
     extension: mp4
     videoenc: >
       vapostproc !
-      vah265enc !
+      vah265enc rate-control=cqp qpi=22 qpp=22 qpb=22 b-frames=0 key-int-max=60 !
       queue !
       h265parse
-    audioenc: >
-      audioconvert !
-      lamemp3enc !
-      queue !
-      mpegaudioparse
+    audio:
+      - id: aac
+        enc: >
+          audioconvert !
+          avenc_aac bitrate=128000 !
+          aacparse !
+          queue
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc bitrate=128000 !
+          opusparse !
+          queue
     muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
 
   - id: va-av1
@@ -93,57 +129,89 @@ supported:
     extension: mkv
     videoenc: >
       vapostproc !
-      vaav1enc !
+      vaav1enc rate-control=cqp qp=110 key-int-max=60 !
       queue !
       av1parse
-    audioenc: >
-      audioconvert !
-      opusenc !
-      queue
+    audio:
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc !
+          queue
+      - id: aac
+        enc: >
+          audioconvert !
+          avenc_aac bitrate=128000 !
+          aacparse !
+          queue
     muxer: matroskamux
 
   - id: nvenc-h264
     name: MP4 (NVENC H.264)
     extension: mp4
     videoenc: >
-      videoconvert chroma-mode=none dither=none matrix-mode=output-only n-threads=${N_THREADS} !
-      nvh264enc !
+      cudaupload !
+      nvh264enc preset=p4 tune=low-latency rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=60 bframes=0 zerolatency=true !
       queue !
       h264parse
-    audioenc: >
-      audioconvert !
-      lamemp3enc !
-      queue !
-      mpegaudioparse
+    audio:
+      - id: aac
+        enc: >
+          audioconvert !
+          avenc_aac bitrate=128000 !
+          aacparse !
+          queue
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc bitrate=128000 !
+          opusparse !
+          queue
     muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
 
   - id: nvenc-h265
     name: MP4 (NVENC H.265)
     extension: mp4
     videoenc: >
-      videoconvert chroma-mode=none dither=none matrix-mode=output-only n-threads=${N_THREADS} !
-      nvh265enc !
+      cudaupload !
+      nvh265enc preset=p4 tune=low-latency rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=60 bframes=0 zerolatency=true !
       queue !
       h265parse
-    audioenc: >
-      audioconvert !
-      lamemp3enc !
-      queue !
-      mpegaudioparse
+    audio:
+      - id: aac
+        enc: >
+          audioconvert !
+          avenc_aac bitrate=128000 !
+          aacparse !
+          queue
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc bitrate=128000 !
+          opusparse !
+          queue
     muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
 
   - id: nvenc-av1
     name: Matroska (NVENC AV1)
     extension: mkv
     videoenc: >
-      videoconvert chroma-mode=none dither=none matrix-mode=output-only n-threads=${N_THREADS} !
-      nvav1enc !
+      cudaupload !
+      nvav1enc preset=p4 tune=low-latency rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=60 bframes=0 zerolatency=true !
       queue !
       av1parse
-    audioenc: >
-      audioconvert !
-      opusenc !
-      queue
+    audio:
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc !
+          queue
+      - id: aac
+        enc: >
+          audioconvert !
+          avenc_aac bitrate=128000 !
+          aacparse !
+          queue
     muxer: matroskamux
 
 experimental:
@@ -154,10 +222,12 @@ experimental:
       videoconvert chroma-mode=none dither=none matrix-mode=output-only n-threads=${N_THREADS} !
       vp9enc max-quantizer=17 cpu-used=16 deadline=1 static-threshold=100 keyframe-mode=disabled buffer-size=20000 threads=${N_THREADS} !
       queue
-    audioenc: >
-      audioconvert !
-      opusenc !
-      queue
+    audio:
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc !
+          queue
     muxer: webmmux
 
   - id: webm-av1
@@ -167,8 +237,10 @@ experimental:
       videoconvert chroma-mode=none dither=none matrix-mode=output-only n-threads=${N_THREADS} !
       av1enc usage-profile=realtime max-quantizer=17 cpu-used=5 end-usage=cq buf-sz=20000 threads=${N_THREADS} !
       queue
-    audioenc: >
-      audioconvert !
-      opusenc !
-      queue
+    audio:
+      - id: opus
+        enc: >
+          audioconvert !
+          opusenc !
+          queue
     muxer: webmmux

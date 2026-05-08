@@ -58,6 +58,23 @@
                 <property name="title" translatable="yes">Frame Rate</property>
               </object>
             </child>
+            <child>
+              <object class="AdwComboRow" id="resolution_row">
+                <property name="title" translatable="yes">Resolution</property>
+                <property name="subtitle" translatable="yes">Output height; width scales to preserve aspect ratio</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwPreferencesGroup">
+            <property name="title" translatable="yes">Audio</property>
+            <child>
+              <object class="AdwComboRow" id="audio_codec_row">
+                <property name="title" translatable="yes">Codec</property>
+                <property name="subtitle" translatable="yes">WebM recordings always use Opus regardless of this setting</property>
+              </object>
+            </child>
           </object>
         </child>
       </object>
