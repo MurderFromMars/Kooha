@@ -224,7 +224,23 @@ impl PipelineBuilder {
     }
 }
 
-fn make_pipewiresrc(fd: RawFd, path: &str) -> Result<gst::Element> {
+/// Builds a `pipewiresrc` plus a follow-on capsfilter that constrains the
+/// negotiated framerate. The capsfilter's caps are built with ANY features
+/// so they intersect with `pipewiresrc`'s DMABuf output (a plain
+/// `video/x-raw` capsfilter implicitly means SystemMemory and would fail
+/// negotiation on KWin/NVIDIA Wayland).
+///
+/// The framerate is expressed as a range `[1/1, N/1]` rather than pinned
+/// exactly: KWin advertises a fixed list of supported rates, so pinning a
+/// value not on the list breaks negotiation. The range intersects with the
+/// portal's list and KWin picks the highest rate it can deliver up to N.
+/// `videorate` further down the pipeline still converts to exactly N for
+/// the encoder.
+fn make_pipewiresrc(
+    fd: RawFd,
+    path: &str,
+    framerate: gst::Fraction,
+) -> Result<(gst::Element, gst::Element)> {
     let src = gst::ElementFactory::make("pipewiresrc")
         .property("fd", fd)
         .property("path", path)
@@ -234,7 +250,19 @@ fn make_pipewiresrc(fd: RawFd, path: &str) -> Result<gst::Element> {
         .property("resend-last", true)
         .build()?;
 
-    Ok(src)
+    let one = gst::Fraction::new(1, 1);
+    let caps = gst::Caps::builder_full_with_any_features()
+        .structure(
+            gst::Structure::builder("video/x-raw")
+                .field("framerate", gst::FractionRange::new(one, framerate))
+                .build(),
+        )
+        .build();
+    let capsfilter = gst::ElementFactory::make("capsfilter")
+        .property("caps", caps)
+        .build()?;
+
+    Ok((src, capsfilter))
 }
 
 fn make_videoflip() -> Result<gst::Element> {
@@ -372,9 +400,11 @@ pub fn make_videosrc_bin(
     match streams {
         [] => bail!("No streams provided"),
         [stream] => {
-            let pipewiresrc = make_pipewiresrc(fd, &stream.node_id().to_string())?;
-            bin.add(&pipewiresrc)?;
-            pipewiresrc.link(&scale_sink)?;
+            let (pipewiresrc, src_capsfilter) =
+                make_pipewiresrc(fd, &stream.node_id().to_string(), framerate)?;
+            bin.add_many([&pipewiresrc, &src_capsfilter])?;
+            pipewiresrc.link(&src_capsfilter)?;
+            src_capsfilter.link(&scale_sink)?;
         }
         streams => {
             let compositor = gst::ElementFactory::make("compositor").build()?;
@@ -383,10 +413,12 @@ pub fn make_videosrc_bin(
 
             let mut last_pos = 0;
             for stream in streams {
-                let pipewiresrc = make_pipewiresrc(fd, &stream.node_id().to_string())?;
+                let (pipewiresrc, src_capsfilter) =
+                    make_pipewiresrc(fd, &stream.node_id().to_string(), framerate)?;
                 let videoflip = make_videoflip()?;
-                bin.add_many([&pipewiresrc, &videoflip])?;
-                pipewiresrc.link(&videoflip)?;
+                bin.add_many([&pipewiresrc, &src_capsfilter, &videoflip])?;
+                pipewiresrc.link(&src_capsfilter)?;
+                src_capsfilter.link(&videoflip)?;
 
                 let compositor_sink_pad = compositor
                     .request_pad_simple("sink_%u")
