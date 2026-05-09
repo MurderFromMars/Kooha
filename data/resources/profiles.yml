@@ -152,7 +152,7 @@ supported:
     videoenc: >
       glupload !
       cudaupload !
-      nvh264enc preset=p4 tune=low-latency rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=60 bframes=0 zerolatency=true !
+      nvh264enc preset=p4 tune=high-quality rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=120 bframes=0 !
       queue !
       h264parse
     audio:
@@ -176,7 +176,7 @@ supported:
     videoenc: >
       glupload !
       cudaupload !
-      nvh265enc preset=p4 tune=low-latency rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=60 bframes=0 zerolatency=true !
+      nvh265enc preset=p4 tune=high-quality rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=120 bframes=0 !
       queue !
       h265parse
     audio:
@@ -200,7 +200,7 @@ supported:
     videoenc: >
       glupload !
       cudaupload !
-      nvav1enc preset=p4 tune=low-latency rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=60 bframes=0 zerolatency=true !
+      nvav1enc preset=p4 tune=high-quality rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=120 bframes=0 !
       queue !
       av1parse
     audio:
