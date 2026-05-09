@@ -44,7 +44,7 @@ supported:
           opusenc bitrate=128000 !
           opusparse !
           queue
-    muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
+    muxer: mp4mux fragment-duration=2000 fragment-mode=first-moov-then-finalise
 
   - id: matroska-h264
     name: Matroska
@@ -99,7 +99,7 @@ supported:
           opusenc bitrate=128000 !
           opusparse !
           queue
-    muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
+    muxer: mp4mux fragment-duration=2000 fragment-mode=first-moov-then-finalise
 
   - id: va-h265
     name: MP4 (VA-API H.265)
@@ -122,7 +122,7 @@ supported:
           opusenc bitrate=128000 !
           opusparse !
           queue
-    muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
+    muxer: mp4mux fragment-duration=2000 fragment-mode=first-moov-then-finalise
 
   - id: va-av1
     name: Matroska (VA-API AV1)
@@ -153,8 +153,8 @@ supported:
       glupload !
       cudaupload !
       nvh264enc preset=p4 tune=high-quality rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=120 bframes=0 !
-      queue !
-      h264parse
+      h264parse !
+      queue max-size-buffers=0 max-size-bytes=134217728 max-size-time=4000000000
     audio:
       - id: aac
         enc: >
@@ -168,7 +168,7 @@ supported:
           opusenc bitrate=128000 !
           opusparse !
           queue
-    muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
+    muxer: mp4mux fragment-duration=2000 fragment-mode=first-moov-then-finalise
 
   - id: nvenc-h265
     name: MP4 (NVENC H.265)
@@ -177,8 +177,8 @@ supported:
       glupload !
       cudaupload !
       nvh265enc preset=p4 tune=high-quality rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=120 bframes=0 !
-      queue !
-      h265parse
+      h265parse !
+      queue max-size-buffers=0 max-size-bytes=134217728 max-size-time=4000000000
     audio:
       - id: aac
         enc: >
@@ -192,7 +192,7 @@ supported:
           opusenc bitrate=128000 !
           opusparse !
           queue
-    muxer: mp4mux fragment-duration=500 fragment-mode=first-moov-then-finalise
+    muxer: mp4mux fragment-duration=2000 fragment-mode=first-moov-then-finalise
 
   - id: nvenc-av1
     name: Matroska (NVENC AV1)
@@ -201,8 +201,8 @@ supported:
       glupload !
       cudaupload !
       nvav1enc preset=p4 tune=high-quality rc-mode=constqp qp-const-i=22 qp-const-p=22 qp-const-b=22 gop-size=120 bframes=0 !
-      queue !
-      av1parse
+      av1parse !
+      queue max-size-buffers=0 max-size-bytes=134217728 max-size-time=4000000000
     audio:
       - id: opus
         enc: >
