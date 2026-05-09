@@ -248,11 +248,18 @@ fn make_pipewiresrc(
         .property("resend-last", true)
         .build()?;
 
+    // Use a range `[1/1, N/1]` rather than pinning `framerate=N/1`. KWin
+    // (and likely other portals) advertises a fixed list of supported rates
+    // — pinning a value not on the list breaks negotiation entirely. The
+    // range intersects with the portal's list so the portal picks the
+    // highest rate it can deliver up to N. videorate downstream still
+    // converts to exactly N.
+    let one = gst::Fraction::new(1, 1);
     let capsfilter = gst::ElementFactory::make("capsfilter")
         .property(
             "caps",
             gst::Caps::builder("video/x-raw")
-                .field("framerate", framerate)
+                .field("framerate", gst::FractionRange::new(one, framerate))
                 .build(),
         )
         .build()?;
