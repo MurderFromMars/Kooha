@@ -254,12 +254,22 @@ fn make_pipewiresrc(
     // range intersects with the portal's list so the portal picks the
     // highest rate it can deliver up to N. videorate downstream still
     // converts to exactly N.
+    //
+    // Caps are built with ANY features so the constraint applies regardless
+    // of memory feature. `pipewiresrc` emits `video/x-raw(memory:DMABuf)`
+    // on KWin/NVIDIA Wayland — a plain `video/x-raw` capsfilter (which
+    // implicitly means `memory:SystemMemory`) does not intersect with that
+    // and breaks negotiation.
     let one = gst::Fraction::new(1, 1);
     let capsfilter = gst::ElementFactory::make("capsfilter")
         .property(
             "caps",
-            gst::Caps::builder("video/x-raw")
-                .field("framerate", gst::FractionRange::new(one, framerate))
+            gst::Caps::builder_full_with_any_features()
+                .structure(
+                    gst::Structure::builder("video/x-raw")
+                        .field("framerate", gst::FractionRange::new(one, framerate))
+                        .build(),
+                )
                 .build(),
         )
         .build()?;
